@@ -1,14 +1,15 @@
-__author__ = 'kelvinsun'
 import unittest
 import os
 import codecs
-import lxml
 from selenium import webdriver
 from bs4 import BeautifulSoup
+import lxml
 
-class seleniumTest(unittest.TestCase):
+
+class SeleniumTest(unittest.TestCase):
+
     def setUp(self):
-        self.driver = webdriver.PhantomJS("D:\Program_Coding\phantomjs\\bin\phantomjs")
+        self.driver = webdriver.PhantomJS("E:\Program_Coding\phantomjs\\bin\phantomjs")
 
     def testEle(self):
         if not os.path.exists('./output'):
