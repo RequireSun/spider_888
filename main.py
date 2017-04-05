@@ -10,7 +10,7 @@ import lxml
 class SeleniumTest(unittest.TestCase):
 
     def setUp(self):
-        self.driver = webdriver.PhantomJS("E:\Program_Coding\phantomjs\\bin\phantomjs")
+        self.driver = webdriver.PhantomJS("D:\Program_Coding\phantomjs\\bin\phantomjs")
 
     def testEle(self):
         if not os.path.exists('./output'):
