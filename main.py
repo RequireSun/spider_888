@@ -1,6 +1,7 @@
 import unittest
 import os
 import codecs
+from functools import reduce
 from selenium import webdriver
 from bs4 import BeautifulSoup
 import lxml
@@ -22,11 +23,14 @@ class SeleniumTest(unittest.TestCase):
         while True:
             page += 1
             print('parsing page:', page)
-            titles = soup.find_all('h3', {'class': 'ellipsis'})
-            nums = soup.find_all('span', {'class': 'dy-num fr'})
+            imgs = soup.find_all('img')
+            # nums = soup.find_all('span', {'class': 'dy-num fr'})
             rooms = []
-            for title, num in zip(titles, nums):
-                rooms.append(title.get_text().strip() + "\t" + num.get_text().strip())
+            for img in imgs:
+                rooms.append(img.get("src").strip())
+            # for title, num in zip(titles, nums):
+            #     rooms.append(title.get_text().strip() + "\t" + num.get_text().strip())
+            rooms = reduce(lambda arr, item: arr if item in arr else arr + [item], [[], ] + rooms)
             self.rooms.writelines([line + "\r\n" for line in rooms])
             if driver.page_source.find('shark-pager-disable-next') != -1:
                 break
