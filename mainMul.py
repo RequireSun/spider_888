@@ -13,9 +13,21 @@ import lxml
 
 # startUrl = 'http://sz.fang.anjuke.com/?from=navigation'
 startUrl = "https://qs.888.qq.com/m_qq/mqq2.local.html"
-phantom_path = "D:\Program_Coding\phantomjs\\bin\phantomjs"
-phantom_cookie = [{"name": "uin", "value": "o0862683427", "domain": ".qq.com", 'path': '/', 'expires': None}, {"name": "skey", "value": "@qktg5GVjT", "domain": ".qq.com", 'path': '/', 'expires': None}]
+phantom_path = "E:\Program_Coding\phantomjs\\bin\phantomjs"
 
+
+def get_cookie():
+    if not hasattr(get_cookie, 'cookie_arr'):
+        get_cookie.cookie_arr = []
+    if 0 >= len(get_cookie.cookie_arr):
+        with codecs.open('./.cookie', 'r', 'utf-8') as file:
+            cookies = file.read()
+            cookies = cookies.split(';')
+            for cookie in cookies:
+                cookie_parts = cookie.split('=')
+                if cookie_parts and cookie_parts[0] and cookie_parts[1]:
+                    get_cookie.cookie_arr.append({"name": cookie_parts[0], "value": cookie_parts[1], "domain": ".qq.com", 'path': '/', 'expires': None})
+    return get_cookie.cookie_arr
 
 
 # def write_callback(data_arr):
@@ -56,10 +68,10 @@ def page_urls(driver, url):
     # return [url + '/loupan/s?p={}'.format(str(i)) for i in range(1, int(page_num + 2), 1)]
 
 
-def detail_page(url):
+def detail_page(url, cookies):
     driver = webdriver.PhantomJS(phantom_path)
     driver.delete_all_cookies()
-    for cookie in phantom_cookie:
+    for cookie in cookies:
         driver.add_cookie(cookie)
     urls = page_urls(driver, url)
     print(url, urls)
@@ -81,7 +93,7 @@ def detail_page(url):
 def main(cities_arr):
     pool = multiprocessing.Pool(multiprocessing.cpu_count() * 3)
     for city in cities_arr:
-        pool.apply_async(detail_page, (city, ), callback=write_callback)
+        pool.apply_async(detail_page, (city, get_cookie()), callback=write_callback)
     # pool.map(detailPage, urls)
     pool.close()
     pool.join()
@@ -119,8 +131,7 @@ def main(cities_arr):
 #
 
 
-
-async def wait_element(driver, xpath, time_limit = 10, time_step = .25):
+async def wait_element(driver, xpath, time_limit=10, time_step=.25):
     end_time = time.time() + time_limit
     while True:
         value = driver.find_elements(By.XPATH, xpath)
@@ -132,9 +143,9 @@ async def wait_element(driver, xpath, time_limit = 10, time_step = .25):
     return False
 
 
-async def get_url_888(driver, url):
+async def get_url_888(driver, url, cookies):
     driver.delete_all_cookies()
-    for cookie in phantom_cookie:
+    for cookie in cookies:
         driver.add_cookie(cookie)
     driver.get(url)
 
@@ -165,7 +176,7 @@ if __name__ == "__main__":
     driver = webdriver.PhantomJS(phantom_path)
     # get_url_888(driver, startUrl)
     loop = asyncio.get_event_loop()
-    loop.run_until_complete(get_url_888(driver, startUrl))
+    loop.run_until_complete(get_url_888(driver, startUrl, get_cookie()))
     loop.close()
 
 

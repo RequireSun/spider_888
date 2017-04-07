@@ -1,4 +1,4 @@
-<<<<<<< HEAD
+.cookie
 .idea
 output
 *.log
@@ -93,4 +93,3 @@ ENV/
 
 # Rope project settings
 .ropeproject
->>>>>>> 272a8d67995cf9336ba514644674b012059fd382
