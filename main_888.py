@@ -10,8 +10,9 @@ from selenium.webdriver.common.by import By
 
 # startUrl = "https://qs.888.qq.com/m_qq/mqq2.local.html"
 phantom_path = "E:\Program_Coding\phantomjs\\bin\phantomjs"
-url_pool = ["https://qs.888.qq.com/m_qq/mqq2.local.html"]
+url_pool = [{"url": "https://qs.888.qq.com/m_qq/mqq2.local.html", "depth": 1}]
 visited_pool = []
+max_depth = 7
 
 
 def search_pool(key):
@@ -107,7 +108,7 @@ def page_urls(driver, url):
     return {"pages": pages, "images": images}
 
 
-async def detail_page(url):
+async def detail_page(url, depth):
     driver = webdriver.PhantomJS(phantom_path)
     cookies = get_cookie()
     driver.delete_all_cookies()
@@ -121,18 +122,20 @@ async def detail_page(url):
     else:
         element_xpath = '//body/div/*'
 
-    elements = await wait_element(driver, element_xpath)
+    element = await wait_element(driver, element_xpath)
 
-    if elements:
+    if element:
+        print('processing:', url)
         global url_pool
+        global max_depth
         soup = BeautifulSoup(driver.page_source, 'lxml')
         url_pre = driver.execute_script('return window.location.protocol + "//" + window.location.host')
         for url in soup.select('[url]'):
             url_tmp = url.get('url')
             if not re.match(r'http(s)?://', url_tmp):
                 url_tmp = url_pre + url_tmp
-            if not search_pool(url_tmp) and not search_visited(url_tmp):
-                url_pool.append({"url": url_tmp})
+            if not search_pool(url_tmp) and not search_visited(url_tmp) and depth + 1 < max_depth:
+                url_pool.append({"url": url_tmp, "depth": depth + 1})
     else:
         print('program cannot load pages, are you logged in?')
 
@@ -151,16 +154,16 @@ async def wait_element(driver, xpath, time_limit=10, time_step=.25):
         value = driver.find_elements(By.XPATH, xpath)
         if value:
             return True
-        asyncio.sleep(time_step)
+        await asyncio.sleep(time_step)
         if time.time() > end_time:
             break
     return False
 
 
-async def process_controller():
-    pool = multiprocessing.Pool(multiprocessing.cpu_count() * 3)
+async def process_controller(multiple):
+    pool = multiprocessing.Pool(multiprocessing.cpu_count() * (multiple or 3))
     for url in url_pool:
-        pool.apply_async(detail_page, (url, ), callback=write_callback)
+        pool.apply_async(detail_page, (url["url"], url["depth"]), callback=write_callback)
     move_to_visited()
     pool.close()
     pool.join()
@@ -169,5 +172,5 @@ async def process_controller():
 if __name__ == "__main__":
     while len(url_pool):
         loop = asyncio.get_event_loop()
-        loop.run_until_complete(process_controller())
+        loop.run_until_complete(process_controller(3))
         loop.close()
