@@ -13,6 +13,7 @@ phantom_path = "E:\Program_Coding\phantomjs\\bin\phantomjs"
 url_pool = [{"url": "https://qs.888.qq.com/m_qq/mqq2.local.html", "depth": 1}]
 visited_pool = []
 max_depth = 7
+multiple = 3
 
 
 def search_pool(key):
@@ -107,38 +108,6 @@ def page_urls(driver, url):
 
     return {"pages": pages, "images": images}
 
-
-async def detail_page(url, depth):
-    driver = webdriver.PhantomJS(phantom_path)
-    cookies = get_cookie()
-    driver.delete_all_cookies()
-    for cookie in cookies:
-        driver.add_cookie(cookie)
-    driver.get(url)
-
-    container = re.search(r"[\"']containerId[\"']:\s*[\"'](.*?)[\"']", driver.page_source)
-    if container:
-        element_xpath = '//*[@id="' + container.group(1) + '"]/div/*'
-    else:
-        element_xpath = '//body/div/*'
-
-    element = await wait_element(driver, element_xpath)
-
-    if element:
-        print('processing:', url)
-        global url_pool
-        global max_depth
-        soup = BeautifulSoup(driver.page_source, 'lxml')
-        url_pre = driver.execute_script('return window.location.protocol + "//" + window.location.host')
-        for url in soup.select('[url]'):
-            url_tmp = url.get('url')
-            if not re.match(r'http(s)?://', url_tmp):
-                url_tmp = url_pre + url_tmp
-            if not search_pool(url_tmp) and not search_visited(url_tmp) and depth + 1 < max_depth:
-                url_pool.append({"url": url_tmp, "depth": depth + 1})
-    else:
-        print('program cannot load pages, are you logged in?')
-
     # driver = webdriver.PhantomJS(phantom_path)
     # driver.delete_all_cookies()
     # for cookie in cookies:
@@ -160,17 +129,65 @@ async def wait_element(driver, xpath, time_limit=10, time_step=.25):
     return False
 
 
-async def process_controller(multiple):
-    pool = multiprocessing.Pool(multiprocessing.cpu_count() * (multiple or 3))
-    for url in url_pool:
-        pool.apply_async(detail_page, (url["url"], url["depth"]), callback=write_callback)
-    move_to_visited()
-    pool.close()
-    pool.join()
+def push_to_arr(url, url_pre, depth):
+    global url_pool
+    global max_depth
+    if not re.match(r'http(s)?://', url):
+        url = url_pre + url
+    if not search_pool(url) and not search_visited(url) and depth + 1 < max_depth:
+        url_pool.append({"url": url, "depth": depth + 1})
+        return url
+    else:
+        return None
 
+
+async def async_page(url, depth):
+    driver = webdriver.PhantomJS(phantom_path)
+    cookies = get_cookie()
+    driver.delete_all_cookies()
+    for cookie in cookies:
+        driver.add_cookie(cookie)
+    driver.get(url)
+
+    container = re.search(r"[\"']containerId[\"']:\s*[\"'](.*?)[\"']", driver.page_source)
+    if container:
+        element_xpath = '//*[@id="' + container.group(1) + '"]/div/*'
+    else:
+        element_xpath = '//body/div/*'
+
+    element = await wait_element(driver, element_xpath)
+
+    if element:
+        res = []
+        print('processing:', url)
+        soup = BeautifulSoup(driver.page_source, 'lxml')
+        url_pre = driver.execute_script('return window.location.protocol + "//" + window.location.host')
+        for url in soup.select('[url]'):
+            pushed = push_to_arr(url.get('url'), url_pre, depth)
+            if pushed:
+                res.append(pushed)
+        for url in soup.select('a[href]'):
+            pushed = push_to_arr(url.get('href'), url_pre, depth)
+            if pushed:
+                res.append(pushed)
+        return res
+    else:
+        print('program cannot load pages, are you logged in?')
+        return None
+
+
+def detail_page(url, depth):
+    print("dealing url:", url)
+    loop = asyncio.get_event_loop()
+    res = loop.run_until_complete(async_page(url, depth))
+    loop.close()
+    return res
 
 if __name__ == "__main__":
     while len(url_pool):
-        loop = asyncio.get_event_loop()
-        loop.run_until_complete(process_controller(3))
-        loop.close()
+        pool = multiprocessing.Pool(multiprocessing.cpu_count() * multiple)
+        for url in url_pool:
+            pool.apply_async(detail_page, (url["url"], url["depth"]), callback=write_callback)
+        move_to_visited()
+        pool.close()
+        pool.join()
