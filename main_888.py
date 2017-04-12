@@ -24,12 +24,16 @@ def search_pool(key):
         True: key 不存在 / key 不合理 / key 已存在
         False: key 不存在 (可以插入)
     """
+    global url_pool
     if not key:
         return True
+    if not len(url_pool):
+        return False
     key = re.match(r'(http(?:s)?://[^\?#]*)[^#]*(#[^&]*)?', key)
     if key:
         for url in url_pool:
-            if -1 < url.find(key.group(1)) and (not key.group(2) or -1 < url.find(key.group(2))):
+            url = url["url"]
+            if 0 > url.find(key.group(1)) and (not key.group(2) or 0 > url.find(key.group(2))):
                 return False
             else:
                 return True
@@ -45,12 +49,16 @@ def search_visited(key):
         True: key 不存在 / key 不合理 / key 已存在
         False: key 不存在 (可以插入)
     """
+    global visited_pool
     if not key:
         return True
+    if not len(visited_pool):
+        return False
     key = re.match(r'(http(?:s)?://[^\?#]*)[^#]*(#[^&]*)?', key)
     if key:
         for url in visited_pool:
-            if -1 < url.find(key.group(1)) and (not key.group(2) or -1 < url.find(key.group(2))):
+            url = url["url"]
+            if 0 > url.find(key.group(1)) and (not key.group(2) or 0 > url.find(key.group(2))):
                 return False
             else:
                 return True
@@ -80,9 +88,11 @@ def get_cookie():
 
 
 def write_callback(data_arr):
-    fangs = reduce(lambda arr, item: arr if item in arr else arr + [item], [[], ] + data_arr)
+    global url_pool
+    urls = reduce(lambda arr, item: arr if item in arr else arr + [item], [[], ] + data_arr)
+    url_pool = url_pool + data_arr
     with codecs.open('./output/888.txt', 'a+', "utf-8") as f:
-        f.writelines([line + "\r\n" for line in fangs])
+        f.writelines([line["url"] + "\r\n" for line in urls])
 
 
 def page_urls(driver, url):
@@ -117,25 +127,35 @@ def page_urls(driver, url):
     # return [url].extend([url_tmp for url_tmp in urls['pages']]).extend([img_tmp for img_tmp in urls['images']])
 
 
-async def wait_element(driver, xpath, time_limit=10, time_step=.25):
+async def wait_element(driver, xpath, not_empty_xpath, time_limit=10, time_step=.25):
     end_time = time.time() + time_limit
     while True:
         value = driver.find_elements(By.XPATH, xpath)
+        # 就算页面加载上了, 也还是会有延迟加载的东西, 导致元素丢失, 绝望了, 改成强制 8 秒了
+        # value = end_time - time.time() < 2
+
         if value:
-            return True
+            value = driver.find_elements(By.XPATH, not_empty_xpath)
+            mark = True
+            for it in value:
+                if not len(it.find_elements_by_xpath('*')):
+                    mark = False
+            if mark:
+                return True
         await asyncio.sleep(time_step)
         if time.time() > end_time:
             break
     return False
 
 
-def push_to_arr(url, url_pre, depth):
+def should_push_to_arr(url, url_pre, depth):
     global url_pool
     global max_depth
     if not re.match(r'http(s)?://', url):
         url = url_pre + url
+    # print(url, search_pool(url), search_visited(url))
     if not search_pool(url) and not search_visited(url) and depth + 1 < max_depth:
-        url_pool.append({"url": url, "depth": depth + 1})
+        # url_pool.append({"url": url, "depth": depth + 1})
         return url
     else:
         return None
@@ -154,22 +174,28 @@ async def async_page(url, depth):
         element_xpath = '//*[@id="' + container.group(1) + '"]/div/*'
     else:
         element_xpath = '//body/div/*'
+    not_empty_xpath = '//ul'
 
-    element = await wait_element(driver, element_xpath)
+    element = await wait_element(driver, element_xpath, not_empty_xpath)
 
     if element:
         res = []
         print('processing:', url)
+        # print(driver.page_source)
         soup = BeautifulSoup(driver.page_source, 'lxml')
         url_pre = driver.execute_script('return window.location.protocol + "//" + window.location.host')
-        for url in soup.select('[url]'):
-            pushed = push_to_arr(url.get('url'), url_pre, depth)
+
+        # 因为单独的属性选择器会有 bug, 导致只能选到一条, 所以前面加了个父元素
+        for elem_url in soup.select('div [url]'):
+            pushed = should_push_to_arr(elem_url.get('url'), url_pre, depth)
+            # print('got', pushed, elem_url)
             if pushed:
-                res.append(pushed)
-        for url in soup.select('a[href]'):
-            pushed = push_to_arr(url.get('href'), url_pre, depth)
+                res.append({"url": pushed, "depth": depth + 1})
+        for elem_url in soup.select('a[href]'):
+            pushed = should_push_to_arr(elem_url.get('href'), url_pre, depth)
+            # print('got', pushed, elem_url)
             if pushed:
-                res.append(pushed)
+                res.append({"url": pushed, "depth": depth + 1})
         return res
     else:
         print('program cannot load pages, are you logged in?')
@@ -191,3 +217,5 @@ if __name__ == "__main__":
         move_to_visited()
         pool.close()
         pool.join()
+    print(url_pool)
+    print(visited_pool)
